@@ -24,7 +24,10 @@ export type RegisterUserbyAdminRequestBody = {
 // admin route type
 export type FetchModelFromInputedUrlRequest = {
   Body: {
-    url: string;
+    url?: string;
+    api_key?: string;
+    api_type: "openai" | "ollama",
+    ollama_url?: string;
   };
 };
 export type SaveModelFromInputedUrlRequest = {
@@ -33,6 +36,8 @@ export type SaveModelFromInputedUrlRequest = {
     model_id: string;
     name: string;
     stream_available: boolean;
+    api_key?: string;
+    api_type: "openai" | "ollama";
   };
 };
 

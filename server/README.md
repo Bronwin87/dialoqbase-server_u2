@@ -1,23 +1,28 @@
-# Getting Started with [Fastify-CLI](https://www.npmjs.com/package/fastify-cli)
-This project was bootstrapped with Fastify-CLI.
+# Backend
 
-## Available Scripts
+Backend code for the dialoqbase project.
 
-In the project directory, you can run:
 
-### `npm run dev`
+## Setup
 
-To start the app in dev mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+### Install dependencies
 
-### `npm start`
+```bash
+npm install
+```
 
-For production mode
+### Setup environment variables
 
-### `npm run test`
+Create a `.env` file in the root directory of the project and add the following variables:
 
-Run the test cases.
+```bash
+cp .env.example .env
+```
 
-## Learn More
+### Run the server
 
-To learn Fastify, check out the [Fastify documentation](https://www.fastify.io/docs/latest/).
+```bash
+npm run dev
+```
+
+The server will be running on `http://localhost:3000`. API documentation is available at `http://localhost:3000/docs`. 

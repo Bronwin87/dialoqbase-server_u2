@@ -8,9 +8,16 @@ import {
 } from "./type";
 import axios from "axios";
 
-const _getModelFromUrl = async (url: string) => {
+const _getModelFromUrl = async (url: string, apiKey?: string) => {
   try {
-    const response = await axios.get(`${url}/models`);
+    const response = await axios.get(`${url}/models`, {
+      headers: {
+        "HTTP-Referer":
+          process.env.LOCAL_REFER_URL || "https://dialoqbase.n4ze3m.com/",
+        "X-Title": process.env.LOCAL_TITLE || "Dialoqbase",
+        Authorization: apiKey && `Bearer ${apiKey}`,
+      },
+    });
     return response.data as {
       type: string;
       data: {
@@ -18,6 +25,25 @@ const _getModelFromUrl = async (url: string) => {
         object: string;
       }[];
     };
+  } catch (error) {
+    return null;
+  }
+};
+
+const _getOllamaModels = async (url: string) => {
+  try {
+    const response = await axios.get(`${url}/api/tags`);
+    const { models } = response.data as {
+      models: {
+        name: string;
+      }[];
+    };
+    return models.map((data) => {
+      return {
+        id: data.name,
+        object: data.name,
+      };
+    });
   } catch (error) {
     return null;
   }
@@ -58,7 +84,7 @@ export const fetchModelFromInputedUrlHandler = async (
   reply: FastifyReply
 ) => {
   try {
-    const { url } = request.body;
+    const { url, api_key, api_type, ollama_url } = request.body;
     const user = request.user;
     if (!user.is_admin) {
       return reply.status(403).send({
@@ -66,18 +92,33 @@ export const fetchModelFromInputedUrlHandler = async (
       });
     }
 
-    const model = await _getModelFromUrl(url);
+    if (api_type === "ollama") {
+      const models = await _getOllamaModels(ollama_url!);
 
-    if (!model) {
-      return reply.status(404).send({
-        message:
-          "Unable to fetch model. Inputed url is not openai api compatible",
-      });
+      if (!models) {
+        return reply.status(404).send({
+          message:
+            "Unable to fetch models from Ollama. Make sure Ollama is running and the url is correct",
+        });
+      }
+
+      return {
+        data: models,
+      };
+    } else if (api_type === "openai") {
+      const model = await _getModelFromUrl(url!, api_key);
+
+      if (!model) {
+        return reply.status(404).send({
+          message:
+            "Unable to fetch models. Make sure the url is correct and if the model is protected by api key, make sure the api key is correct",
+        });
+      }
+
+      return {
+        data: model.data,
+      };
     }
-
-    return {
-      data: model.data,
-    };
   } catch (error) {
     console.log(error);
     return reply.status(500).send({
@@ -100,7 +141,8 @@ export const saveModelFromInputedUrlHandler = async (
       });
     }
 
-    const { url, model_id, name, stream_available } = request.body;
+    const { url, api_key, model_id, name, stream_available, api_type } =
+      request.body;
 
     const modelExist = await prisma.dialoqbaseModels.findFirst({
       where: {
@@ -122,9 +164,10 @@ export const saveModelFromInputedUrlHandler = async (
         model_id: model_id,
         stream_available: stream_available,
         local_model: true,
-        model_provider: "local",
+        model_provider: api_type === "openai" ? "local" : "ollama",
         config: {
           baseURL: url,
+          apiKey: api_key,
         },
       },
     });

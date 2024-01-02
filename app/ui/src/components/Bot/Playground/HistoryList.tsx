@@ -19,7 +19,7 @@ export const PlaygroundHistoryList = () => {
     setDefualtTextSpeechSettings,
     setElevenLabsApiKeyPresent,
     setElevenLabsApiKeyValid,
-    setVoices
+    setVoices,
   } = useStoreMessage();
 
   const { data, status } = useQuery(
@@ -51,7 +51,7 @@ export const PlaygroundHistoryList = () => {
         setHistory(
           data.messages.map((item) => {
             return {
-              message: item.message,
+              text: item.message,
               type: item.type,
             };
           })
@@ -62,9 +62,7 @@ export const PlaygroundHistoryList = () => {
   }, [status, data]);
 
   return (
-    <div
-      className={`flex-col flex-1 overflow-y-auto   border-b border-white/20 `}
-    >
+    <div className={`flex-col flex-1 overflow-y-auto`}>
       <div>
         {status === "success" && (
           <div>
@@ -73,7 +71,7 @@ export const PlaygroundHistoryList = () => {
                 <Empty description="No history yet" />
               </div>
             )}
-            <div className="flex flex-col gap-2 overflow-hidden text-gray-100 text-sm ">
+            <div className="flex flex-col gap-2 overflow-hidden text-gray-100 text-sm dark:text-gray-400">
               {data.history.map((item, index) => {
                 return <PlaygroundHistoryCard key={index} item={item} />;
               })}
