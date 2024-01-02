@@ -127,7 +127,7 @@ export const getCreateBotConfigHandler = async (
   const models = await prisma.dialoqbaseModels.findMany({
     where: {
       hide: false,
-      deleted: false
+      deleted: false,
     },
   });
 
@@ -140,21 +140,27 @@ export const getCreateBotConfigHandler = async (
   });
 
   const embeddingModel = [
-    { value: "openai", label: "OpenAI" },
-    { value: "tensorflow", label: "Tensorflow (cpu)" },
+    { value: "openai", label: "text-embedding-ada-002" },
     { value: "cohere", label: "Cohere" },
-    { value: "huggingface-api", label: "HuggingFace (Inference)" },
     {
       value: "transformer",
-      label: "Xenova/all-MiniLM-L6-v2 (cpu)",
-    },
-    {
-      value: "supabase",
-      label: "Supabase/gte-small (cpu)",
+      label: "all-MiniLM-L6-v2 (cpu)",
     },
     {
       value: "google-gecko",
-      label: "Google text-gecko-001 (beta)",
+      label: "Google text-gecko-001",
+    },
+    {
+      value: "jina-api",
+      label: "jina-embeddings-v2-base-en (API)",
+    },
+    {
+      value: "jina",
+      label: "jina-embeddings-v2-small-en (cpu)",
+    },
+    {
+      value: "google",
+      label: "embedding-001 (google)",
     },
   ];
 
@@ -163,8 +169,6 @@ export const getCreateBotConfigHandler = async (
     embeddingModel,
   };
 };
-
-
 
 export const getBotByIdSettingsHandler = async (
   request: FastifyRequest<GetBotRequestById>,
@@ -183,7 +187,7 @@ export const getBotByIdSettingsHandler = async (
   const models = await prisma.dialoqbaseModels.findMany({
     where: {
       hide: false,
-      deleted: false
+      deleted: false,
     },
   });
 
@@ -196,21 +200,27 @@ export const getBotByIdSettingsHandler = async (
   });
 
   const embeddingModel = [
-    { value: "openai", label: "OpenAI" },
-    { value: "tensorflow", label: "Tensorflow (cpu)" },
+    { value: "openai", label: "text-embedding-ada-002" },
     { value: "cohere", label: "Cohere" },
-    { value: "huggingface-api", label: "HuggingFace (Inference)" },
     {
       value: "transformer",
-      label: "Xenova/all-MiniLM-L6-v2 (cpu)",
-    },
-    {
-      value: "supabase",
-      label: "Supabase/gte-small (cpu)",
+      label: "all-MiniLM-L6-v2 (cpu)",
     },
     {
       value: "google-gecko",
-      label: "Google text-gecko-001 (beta)",
+      label: "Google text-gecko-001",
+    },
+    {
+      value: "jina-api",
+      label: "jina-embeddings-v2-base-en (API)",
+    },
+    {
+      value: "jina",
+      label: "jina-embeddings-v2-small-en (cpu)",
+    },
+    {
+      value: "google",
+      label: "embedding-001 (google)",
     },
   ];
 

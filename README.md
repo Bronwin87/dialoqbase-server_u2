@@ -93,6 +93,8 @@ _Important: After the first login, remember to change the default credentials._
 
 - Utilize PostgreSQL for vector search and storing the knowledge base.
 
+- Use any language models or embedding models you want
+
 ## Stack 📚
 
 - [React](https://reactjs.org/)
@@ -136,11 +138,12 @@ and more...
 - [x] fireworks.ai's llama 2 models
 - [x] fireworks.ai's mistral
 - [X] Local AI models
+- [X] Ollama
 
 ### Embedding models
 
 - [x] OpenAI
-- [x] TensorFlow
+- [x] TensorFlow (removed)
 - [x] Hugging Face
 - [x] Cohere
 - [x] all-MiniLM-L6-v2 using [xenova/transformers.js](https://github.com/xenova/transformers.js/)

@@ -7,6 +7,7 @@ import {
   notification,
   Select,
   Tooltip,
+  Input,
 } from "antd";
 import React from "react";
 import api from "../../services/api";
@@ -22,6 +23,7 @@ export default function SettingsModelRoot() {
   const navigate = useNavigate();
   const [openAddModel, setOpenAddModel] = React.useState(false);
   const [fetchUrlForm] = Form.useForm();
+  const apiType = Form.useWatch("api_type", fetchUrlForm);
   const [form] = Form.useForm();
   const client = useQueryClient();
 
@@ -43,10 +45,13 @@ export default function SettingsModelRoot() {
     }
   }, [status]);
 
-  const fetchLocalModels = async (url: string) => {
-    const response = await api.post("/admin/models/fetch", {
-      url,
-    });
+  const fetchLocalModels = async (body: {
+    url: string;
+    api_key?: string;
+    api_type?: string;
+    ollama_url?: string;
+  }) => {
+    const response = await api.post("/admin/models/fetch", body);
     return response.data as {
       data: {
         id: string;
@@ -74,7 +79,9 @@ export default function SettingsModelRoot() {
   const saveLocalModel = async (values: any) => {
     const response = await api.post("/admin/models", {
       ...values,
-      url: fetchUrlForm.getFieldValue("url"),
+      url: fetchUrlForm.getFieldValue("url") || fetchUrlForm.getFieldValue("ollama_url"),
+      api_key: fetchUrlForm.getFieldValue("api_key"),
+      api_type: fetchUrlForm.getFieldValue("api_type"),
     });
     return response.data;
   };
@@ -153,7 +160,7 @@ export default function SettingsModelRoot() {
           <div>
             <div>
               <div className="flex justify-between">
-                <h2 className="text-base font-semibold leading-7 text-gray-900">
+                <h2 className="text-base font-semibold leading-7 text-gray-900 dark:text-white">
                   All Models
                 </h2>
                 <button
@@ -164,14 +171,14 @@ export default function SettingsModelRoot() {
                   Add New Model
                 </button>
               </div>
-              <p className="mt-1 text-sm leading-6 text-gray-500">
+              <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-200">
                 Manage all the AI models in your organization.
               </p>
 
               <dl className="mt-6 space-y-6 divide-y divide-gray-100   text-sm leading-6 ">
                 <div className="mt-5 md:col-span-2 md:mt-0">
                   <Table
-                    pagination={false}
+                    // pagination={false}
                     dataSource={data.data}
                     columns={[
                       {
@@ -278,36 +285,87 @@ export default function SettingsModelRoot() {
                 form={fetchUrlForm}
                 layout="vertical"
                 onFinish={(value) => {
-                  fetchModel(value.url);
+                  fetchModel(value)
+                }}
+                initialValues={{
+                  api_type: "openai",
+                  ollama_url: "http://localhost:11434",
                 }}
               >
-                <Form.Item
-                  help={
-                    <p className="text-sm mb-6 text-gray-500">
-                      {
-                        "We support models that are OpenAI API compatible, such as "
+                {apiType === "openai" && (
+                  <>
+                    <Form.Item
+                      help={
+                        <p className="text-sm mb-6 text-gray-500">
+                          {
+                            "We support models that are OpenAI API compatible, such as "
+                          }
+                          <a
+                            href="https://github.com/go-skynet/LocalAI"
+                            className="text-indigo-600"
+                          >
+                            LocalAI
+                          </a>
+                          .
+                        </p>
                       }
-                      <a
-                        href="https://github.com/go-skynet/LocalAI"
-                        className="text-indigo-600"
-                      >
-                        LocalAI
-                      </a>
-                      .
-                    </p>
-                  }
-                  name="url"
-                  label="URL"
-                  rules={[
-                    {
-                      required: true,
-                    },
-                  ]}
-                >
-                  <input
-                    type="url"
-                    className="border border-gray-200 rounded-md px-3 py-2 w-full"
-                    placeholder="http://localhost:5000/v1"
+                      name="url"
+                      label="URL"
+                      rules={[
+                        {
+                          required: true,
+                        },
+                      ]}
+                    >
+                      <Input
+                        size="large"
+                        type="url"
+                        placeholder="http://localhost:5000/v1"
+                      />
+                    </Form.Item>
+
+                    <Form.Item name="api_key" label="API Key (Optional)">
+                      <Input.Password
+                        size="large"
+                        type="text"
+                        placeholder="Enter API Key (Optional)"
+                      />
+                    </Form.Item>
+                  </>
+                )}
+
+                {apiType === "ollama" && (
+                  <Form.Item
+                    name="ollama_url"
+                    label="URL"
+                    rules={[
+                      {
+                        required: true,
+                      },
+                    ]}
+                  >
+                    <Input
+                      size="large"
+                      type="url"
+                      placeholder="http://localhost:11434"
+                    />
+                  </Form.Item>
+                )}
+
+                <Form.Item name={"api_type"} label="API Type">
+                  <Select
+                    size="large"
+                    placeholder="Select API Type"
+                    options={[
+                      {
+                        label: "OpenAI Compatible API",
+                        value: "openai",
+                      },
+                      {
+                        label: "Ollama",
+                        value: "ollama",
+                      },
+                    ]}
                   />
                 </Form.Item>
 
@@ -342,11 +400,7 @@ export default function SettingsModelRoot() {
                   name="name"
                   label="Model Name"
                 >
-                  <input
-                    type="text"
-                    className="border border-gray-200 rounded-md px-3 py-2 w-full"
-                    placeholder="Enter a model name"
-                  />
+                  <Input size="large" placeholder="Enter a model name" />
                 </Form.Item>
 
                 <Form.Item
@@ -361,6 +415,16 @@ export default function SettingsModelRoot() {
                 >
                   <Select
                     placeholder="Select a model"
+                    size="large"
+                    showSearch
+                    filterOption={(input, option) =>
+                      (option?.label ?? "").includes(input)
+                    }
+                    filterSort={(optionA, optionB) =>
+                      (optionA?.label ?? "")
+                        .toLowerCase()
+                        .localeCompare((optionB?.label ?? "").toLowerCase())
+                    }
                     options={localModels.map((item) => {
                       return {
                         label: item.id,

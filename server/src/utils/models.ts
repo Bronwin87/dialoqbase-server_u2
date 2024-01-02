@@ -4,6 +4,8 @@ import { ChatGooglePaLM } from "langchain/chat_models/googlepalm";
 import { HuggingFaceInference } from "langchain/llms/hf";
 import { DialoqbaseFireworksModel } from "../models/fireworks";
 import { OpenAI } from "langchain/llms/openai";
+import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { ChatOllama } from "langchain/chat_models/ollama";
 
 export const chatModelProvider = (
   provider: string,
@@ -16,14 +18,17 @@ export const chatModelProvider = (
   console.log("provider", provider);
   console.log("modelName", modelName);
 
-
   switch (provider.toLowerCase()) {
     case "openai":
-      console.log("using openai");
+      console.log("using openai", otherFields);
       return new ChatOpenAI({
         modelName: modelName,
         temperature: temperature,
         ...otherFields,
+        configuration: {
+          ...otherFields.configuration,
+          baseURL: process.env.OPENAI_API_URL,
+        },
       });
     case "anthropic":
       console.log("using anthropic");
@@ -33,7 +38,7 @@ export const chatModelProvider = (
         ...otherFields,
       });
     case "google-bison":
-      console.log("using google-bison");
+      console.log("using google");
       return new ChatGooglePaLM({
         temperature: temperature,
         apiKey: process.env.GOOGLE_API_KEY,
@@ -59,6 +64,9 @@ export const chatModelProvider = (
         modelName: modelName,
         temperature: temperature,
         ...otherFields,
+        configuration: {
+          baseURL: process.env.OPENAI_API_URL,
+        },
       });
     case "local":
       console.log("using local");
@@ -68,7 +76,26 @@ export const chatModelProvider = (
         ...otherFields,
         configuration: {
           baseURL: otherFields.baseURL,
+          apiKey: otherFields.apiKey || process.env.OPENAI_API_KEY,
+          defaultHeaders: {
+            "HTTP-Referer":
+              process.env.LOCAL_REFER_URL || "https://dialoqbase.n4ze3m.com/",
+            "X-Title": process.env.LOCAL_TITLE || "Dialoqbase",
+          },
         },
+      });
+    case "google":
+      console.log("using google");
+      return new ChatGoogleGenerativeAI({
+        modelName: modelName,
+        maxOutputTokens: 2048,
+        apiKey: process.env.GOOGLE_API_KEY,
+      });
+    case "ollama":
+      console.log("using ollama");
+      return new ChatOllama({
+        baseUrl: otherFields.baseURL,
+        model: modelName,
       });
     default:
       console.log("using default");
@@ -78,28 +105,6 @@ export const chatModelProvider = (
         ...otherFields,
       });
   }
-};
-
-export const huggingfaceModels: {
-  [key: string]: string;
-} = {
-  "falcon-7b-instruct-inference": "tiiuae/falcon-7b-instruct",
-};
-
-export const fireworksModels: {
-  [key: string]: string;
-} = {
-  "llama-v2-7b-chat": "accounts/fireworks/models/llama-v2-7b-chat",
-  "llama-v2-13b-chat": "accounts/fireworks/models/llama-v2-13b-chat",
-  "llama-v2-70b-chat": "accounts/fireworks/models/llama-v2-70b-chat",
-  "llama-v2-7b-chat-w8a16": "accounts/fireworks/models/llama-v2-7b-chat-w8a16",
-  "llama-v2-13b-chat-w8a16":
-    "accounts/fireworks/models/llama-v2-13b-chat-w8a16",
-  "llama-v2-13b-code-instruct":
-    "accounts/fireworks/models/llama-v2-13b-code-instruct",
-  "llama-v2-34b-code-instruct-w8a16":
-    "accounts/fireworks/models/llama-v2-34b-code-instruct-w8a16",
-  "mistral-7b-instruct-4k": "accounts/fireworks/models/mistral-7b-instruct-4k",
 };
 
 export const streamingSupportedModels = [

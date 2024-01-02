@@ -1,9 +1,12 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { ChatRequestBody } from "./types";
 import { DialoqbaseVectorStore } from "../../../utils/store";
-import { ConversationalRetrievalQAChain } from "langchain/chains";
 import { embeddings } from "../../../utils/embeddings";
 import { chatModelProvider } from "../../../utils/models";
+import { BaseRetriever } from "langchain/schema/retriever";
+import { DialoqbaseHybridRetrival } from "../../../utils/hybrid";
+import { Document } from "langchain/document";
+import { createChain, groupMessagesByConversation } from "../../../chain";
 
 export const chatRequestHandler = async (
   request: FastifyRequest<ChatRequestBody>,
@@ -67,14 +70,42 @@ export const chatRequestHandler = async (
 
     const sanitizedQuestion = message.trim().replaceAll("\n", " ");
     const embeddingModel = embeddings(bot.embedding);
-
-    const vectorstore = await DialoqbaseVectorStore.fromExistingIndex(
-      embeddingModel,
-      {
+    let retriever: BaseRetriever;
+    let resolveWithDocuments: (value: Document[]) => void;
+    const documentPromise = new Promise<Document[]>((resolve) => {
+      resolveWithDocuments = resolve;
+    });
+    if (bot.use_hybrid_search) {
+      retriever = new DialoqbaseHybridRetrival(embeddingModel, {
         botId: bot.id,
         sourceId: null,
-      }
-    );
+        callbacks: [
+          {
+            handleRetrieverEnd(documents) {
+              resolveWithDocuments(documents);
+            },
+          },
+        ],
+      });
+    } else {
+      const vectorstore = await DialoqbaseVectorStore.fromExistingIndex(
+        embeddingModel,
+        {
+          botId: bot.id,
+          sourceId: null,
+        }
+      );
+
+      retriever = vectorstore.asRetriever({
+        callbacks: [
+          {
+            handleRetrieverEnd(documents) {
+              resolveWithDocuments(documents);
+            },
+          },
+        ],
+      });
+    }
 
     const modelinfo = await prisma.dialoqbaseModels.findFirst({
       where: {
@@ -104,55 +135,62 @@ export const chatRequestHandler = async (
       };
     }
 
-    const botConfig = (modelinfo.config as {}) || {};
+    const botConfig: any = (modelinfo.config as {}) || {};
+    if (bot.provider.toLowerCase() === "openai") {
+      if (bot.bot_model_api_key && bot.bot_model_api_key.trim() !== "") {
+        botConfig.configuration = {
+          apiKey: bot.bot_model_api_key,
+        };
+      }
+    }
 
     const model = chatModelProvider(bot.provider, bot.model, temperature, {
       ...botConfig,
     });
 
-    const chain = ConversationalRetrievalQAChain.fromLLM(
-      model,
-      vectorstore.asRetriever(),
-      {
-        qaTemplate: bot.qaPrompt,
-        questionGeneratorTemplate: bot.questionGeneratorPrompt,
-        returnSourceDocuments: true,
-      }
-    );
-
-    const chat_history = history
-      .map((chatMessage: any) => {
-        if (chatMessage.type === "human") {
-          return `Human: ${chatMessage.text}`;
-        } else if (chatMessage.type === "ai") {
-          return `Assistant: ${chatMessage.text}`;
-        } else {
-          return `${chatMessage.text}`;
-        }
-      })
-      .join("\n");
-
-    const response = await chain.call({
-      question: sanitizedQuestion,
-      chat_history: chat_history,
+    const chain = createChain({
+      llm: model,
+      question_llm: model,
+      question_template: bot.questionGeneratorPrompt,
+      response_template: bot.qaPrompt,
+      retriever,
     });
+
+    const botResponse = await chain.invoke({
+      question: sanitizedQuestion,
+      chat_history: groupMessagesByConversation(
+        history.map((message) => ({
+          type: message.type,
+          content: message.text,
+        }))
+      ),
+    });
+
+    const documents = await documentPromise;
 
     await prisma.botWebHistory.create({
       data: {
         chat_id: history_id,
         bot_id: bot.id,
-        bot: response.text,
+        bot: botResponse,
         human: message,
         metadata: {
           ip: request?.ip,
           user_agent: request?.headers["user-agent"],
         },
-        sources: response?.sources,
+        sources: documents.map((doc) => {
+          return {
+            ...doc,
+          };
+        }),
       },
     });
 
     return {
-      bot: response,
+      bot: {
+        text: botResponse,
+        sourceDocuments: documents,
+      },
       history: [
         ...history,
         {
@@ -161,7 +199,7 @@ export const chatRequestHandler = async (
         },
         {
           type: "ai",
-          text: response.text,
+          text: botResponse,
         },
       ],
     };
@@ -274,15 +312,42 @@ export const chatRequestStreamHandler = async (
     const sanitizedQuestion = message.trim().replaceAll("\n", " ");
     const embeddingModel = embeddings(bot.embedding);
 
-    const vectorstore = await DialoqbaseVectorStore.fromExistingIndex(
-      embeddingModel,
-      {
+    let retriever: BaseRetriever;
+    let resolveWithDocuments: (value: Document[]) => void;
+    const documentPromise = new Promise<Document[]>((resolve) => {
+      resolveWithDocuments = resolve;
+    });
+    if (bot.use_hybrid_search) {
+      retriever = new DialoqbaseHybridRetrival(embeddingModel, {
         botId: bot.id,
         sourceId: null,
-      }
-    );
+        callbacks: [
+          {
+            handleRetrieverEnd(documents) {
+              resolveWithDocuments(documents);
+            },
+          },
+        ],
+      });
+    } else {
+      const vectorstore = await DialoqbaseVectorStore.fromExistingIndex(
+        embeddingModel,
+        {
+          botId: bot.id,
+          sourceId: null,
+        }
+      );
 
-    let response: any = null;
+      retriever = vectorstore.asRetriever({
+        callbacks: [
+          {
+            handleRetrieverEnd(documents) {
+              resolveWithDocuments(documents);
+            },
+          },
+        ],
+      });
+    }
 
     reply.raw.on("close", () => {
       console.log("closed");
@@ -325,7 +390,14 @@ export const chatRequestStreamHandler = async (
       return reply.raw.end();
     }
 
-    const botConfig = (modelinfo.config as {}) || {};
+    const botConfig: any = (modelinfo.config as {}) || {};
+    if (bot.provider.toLowerCase() === "openai") {
+      if (bot.bot_model_api_key && bot.bot_model_api_key.trim() !== "") {
+        botConfig.configuration = {
+          apiKey: bot.bot_model_api_key,
+        };
+      }
+    }
 
     const streamedModel = chatModelProvider(
       bot.provider,
@@ -365,49 +437,41 @@ export const chatRequestStreamHandler = async (
       }
     );
 
-    const chain = ConversationalRetrievalQAChain.fromLLM(
-      streamedModel,
-      vectorstore.asRetriever(),
-      {
-        qaTemplate: bot.qaPrompt,
-        questionGeneratorTemplate: bot.questionGeneratorPrompt,
-        returnSourceDocuments: true,
-        questionGeneratorChainOptions: {
-          llm: nonStreamingModel,
-        },
-      }
-    );
-
-    const chat_history = history
-      .map((chatMessage: any) => {
-        if (chatMessage.type === "human") {
-          return `Human: ${chatMessage.text}`;
-        } else if (chatMessage.type === "ai") {
-          return `Assistant: ${chatMessage.text}`;
-        } else {
-          return `${chatMessage.text}`;
-        }
-      })
-      .join("\n");
-
-    console.log("Waiting for response...");
-
-    response = await chain.call({
-      question: sanitizedQuestion,
-      chat_history: chat_history,
+    const chain = createChain({
+      llm: streamedModel,
+      question_llm: nonStreamingModel,
+      question_template: bot.questionGeneratorPrompt,
+      response_template: bot.qaPrompt,
+      retriever,
     });
+
+    let response = await chain.invoke({
+      question: sanitizedQuestion,
+      chat_history: groupMessagesByConversation(
+        history.map((message) => ({
+          type: message.type,
+          content: message.text,
+        }))
+      ),
+    });
+
+    const documents = await documentPromise;
 
     await prisma.botWebHistory.create({
       data: {
         chat_id: history_id,
         bot_id: bot.id,
-        bot: response.text,
+        bot: response,
         human: message,
         metadata: {
           ip: request?.ip,
           user_agent: request?.headers["user-agent"],
         },
-        sources: response?.sources || response?.sourceDocuments || [],
+        sources: documents.map((doc) => {
+          return {
+            ...doc,
+          };
+        }),
       },
     });
 
@@ -415,7 +479,10 @@ export const chatRequestStreamHandler = async (
       event: "result",
       id: "",
       data: JSON.stringify({
-        bot: response,
+        bot: {
+          text: response,
+          sourceDocuments: documents,
+        },
         history: [
           ...history,
           {
@@ -424,7 +491,7 @@ export const chatRequestStreamHandler = async (
           },
           {
             type: "ai",
-            text: response.text,
+            text: response,
           },
         ],
       }),
